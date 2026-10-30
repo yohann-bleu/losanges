@@ -42,6 +42,20 @@
   #b-menu { flex:0 0 52px; font-size:17px; padding:9px 0; }
   #haut button { padding:7px 10px; min-height:36px; font-size:12.5px; }
 
+  #opt { position:fixed; inset:0; z-index:45; display:none; align-items:center; justify-content:center; background:rgba(8,10,18,.8); padding:14px; }
+  #opt.on { display:flex; }
+  #opt .carte { width:min(380px,100%); background:var(--panneau); border:1px solid var(--bord); border-radius:16px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,.6); }
+  #opt h2 { margin:0 0 10px; font-size:18px; color:#fff; }
+  #opt .grille { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+  #opt .ferm { width:100%; background:#2f7d4a; border-color:#43a566; }
+  #pop { position:fixed; left:0; right:0; z-index:8; display:none; background:rgba(12,16,32,.96); border-top:1px solid var(--bord); box-shadow:0 -8px 24px rgba(0,0,0,.5); padding:4px 8px 6px; }
+  #pop.on { display:block; }
+  #pop .ent { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--texte); margin-bottom:2px; }
+  #pop .ent button { min-height:28px; padding:2px 12px; font-size:16px; }
+  #pop-cv { display:block; margin:0 auto; touch-action:manipulation; }
+  #pop-tab { position:fixed; right:8px; z-index:8; display:none; min-height:32px; padding:4px 12px; }
+  #pop-tab.on { display:block; }
+
   /* ===== thème Néon / Tron ===== */
   :root { --fond:#03040c; --panneau:#050818; --bord:#0ff5; --texte:#bff6ff; --doux:#6fd; --hue:180; }
   html,body { background:#02030a; font-family:"Avenir Next","Trebuchet MS","Segoe UI",-apple-system,Arial,sans-serif; letter-spacing:.2px; }
@@ -67,6 +81,10 @@
   #tuto .pts i.a { background:#0ff; box-shadow:0 0 8px #0ff; }
   #edt select { background:#060a1f; color:#e8ffff; border:1px solid #0ff7; }
   #cv { background:#02030a; }
+  #opt .carte { background:linear-gradient(#050818,#050818) padding-box,linear-gradient(90deg,#0ff,#f0f,#ff0,#0ff) border-box; border:2px solid transparent; background-size:100% 100%,300% 100%; animation:bord 6s linear infinite; }
+  #opt h2 { text-transform:uppercase; letter-spacing:1.5px; text-shadow:0 0 10px #0ff; }
+  #pop { background:rgba(3,5,18,.94); border-top:2px solid #0ff; box-shadow:0 -6px 24px #0ff4; }
+  #pop .ent { color:#9ff; text-shadow:0 0 6px #0ff8; }
 
   #tuto { background:radial-gradient(circle at 50% 30%,rgba(40,0,70,.88),rgba(2,3,12,.96)); }
   #tuto .carte,#edt .carte { border:2px solid transparent; background:linear-gradient(#050818,#050818) padding-box,linear-gradient(90deg,#0ff,#f0f,#ff0,#0ff) border-box; background-size:100% 100%,300% 100%; animation:bord 6s linear infinite; }
@@ -85,8 +103,13 @@
 </head>
 <body>
 <div id="haut">
-  <button id="b-obj"></button><button id="b-mode"></button><button id="b-niveau"></button><button id="b-camp"></button><button id="b-vue"></button><button id="b-son">🔊 Son</button><button id="b-regles">? Règles</button><button id="b-editeur">✎ Départs</button>
+  <button id="b-obj"></button><button id="b-mode"></button><button id="b-niveau"></button><button id="b-options">⚙ Options</button>
 </div>
+<div id="opt"><div class="carte"><h2>⚙ Options</h2>
+  <div class="grille"><button id="b-vue"></button><button id="b-camp"></button><button id="b-popup"></button><button id="b-son">🔊 Son</button><button id="b-regles">? Règles</button><button id="b-editeur">✎ Départs</button></div>
+  <button id="opt-fermer" class="ferm">Fermer</button></div></div>
+<div id="pop"><div class="ent"><span id="pop-titre"></span><button id="pop-x">×</button></div><canvas id="pop-cv"></canvas></div>
+<button id="pop-tab">▲ Tuiles</button>
 <div id="zone"><div id="wrap"><canvas id="cv"></canvas><div id="surplateau"></div></div></div>
 <div id="bas">
   <div id="statut"></div>
@@ -785,7 +808,7 @@ class App {
     this.elStatut = document.getElementById("statut");
     this.b = {
       obj: document.getElementById("b-obj"), mode: document.getElementById("b-mode"), niveau: document.getElementById("b-niveau"),
-      camp: document.getElementById("b-camp"), vue: document.getElementById("b-vue"), tourner: document.getElementById("b-tourner"),
+      camp: document.getElementById("b-camp"), vue: document.getElementById("b-vue"), popup: document.getElementById("b-popup"), tourner: document.getElementById("b-tourner"),
       poser: document.getElementById("b-poser"), menu: document.getElementById("b-menu"), annuler: document.getElementById("b-annuler"), passer: document.getElementById("b-passer"),
     };
     this.cfg = [0, 1, 2].map(() => ({ np: 4, total: TOTAL_DEFAUT, eq: 0, depart: 0 }));   // pour chaque mode : nombre de joueurs et total recto + verso des pièces
@@ -793,6 +816,8 @@ class App {
       const t = JSON.parse(localStorage.getItem("losanges_cfg"));
       if (Array.isArray(t) && t.length === 3 && t.every(c => c && Number.isInteger(c.np) && c.np >= 2 && c.np <= 4 && Number.isInteger(c.total) && c.total >= 1 && c.total <= TOTAL_MAX)) this.cfg = t.map(c => ({ np: c.np, total: c.total, eq: (c.np === 4 && c.eq >= 1 && c.eq <= 6) ? c.eq : 0, depart: (c.depart === 1 || c.depart === 2) ? c.depart : 0 }));
     } catch (e) {}
+    this.popup = true; try { this.popup = localStorage.getItem("losanges_popup") !== "0"; } catch (e) {}
+    this.pop_sig = ""; this.pop_ouvert = false; this.pop_cle = "";
     this.mode = 2; this.niveau = 1; this.objectif = MODE_CHAOS; this.humain = 0; this.vue = "auto";
     this.menu = false; this.survol_menu = null; this.survol_reserve = null; this.t_survol_reserve = 0; this.t_survol_fin = null;
     this.ia = new IA(this.niveau); this.gen = 0; this.ia_planifiee = false; this.ia_dest = null;
@@ -877,6 +902,7 @@ onmessage = e => { const { id, niveau, partie } = e.data; Object.setPrototypeOf(
     this.b.niveau.textContent = "Niveau : " + NIVEAUX[this.niveau]; this.b.niveau.disabled = !un;
     this.b.camp.textContent = "Vous : " + NOMS[this.humain]; this.b.camp.disabled = !un;
     this.b.vue.textContent = "Vue : " + this.vue;
+    this.b.popup.textContent = "Tuiles pop-up : " + (this.popup ? "oui" : "non");
   }
   changer_mode() { this.mode = this.mode === 1 ? 2 : 1; this.nouvelle_partie(); }
   changer_niveau() { if (this.mode !== 1) return; this.niveau = (this.niveau + 1) % 4; this.ia.niveau = this.niveau; this.maj_boutons(); this.mettre_a_jour(); }
@@ -1008,6 +1034,47 @@ onmessage = e => { const { id, niveau, partie } = e.data; Object.setPrototypeOf(
     if (!dispo.length) return;
     const k = dispo.indexOf(this.sel);
     this.choisir(k >= 0 ? dispo[(k + 1) % dispo.length] : dispo[0]);
+  }
+  // -- pop-up des tuiles du joueur humain (option) : choisir une tuile sans aller dans le panneau de réserve
+  pop_dims() { const p = this.partie, cols = p.np === 2 ? 2 : p.np - 1, rows = p.total + 1, cw = Math.min(60, Math.floor((window.innerWidth - 24) / cols)), ch = Math.min(30, Math.floor((window.innerHeight * 0.34) / rows)); return { cols, rows, cw, ch }; }
+  pop_visible() {
+    const p = this.partie;
+    return this.popup && !this.menu && this.intro === null && p.phase === "pose" && !this.tour_ia() && !this.verrou() && !document.getElementById("tuto").classList.contains("on") && !document.getElementById("edt").classList.contains("on");
+  }
+  maj_popup(force) {
+    const el = document.getElementById("pop"), tab = document.getElementById("pop-tab"), p = this.partie;
+    if (!p) return;
+    const vis = this.pop_visible(), bas = document.getElementById("bas").getBoundingClientRect(), bot = Math.max(0, window.innerHeight - bas.top);
+    const cle = p.poses.length + "|" + p.joueur + "|" + p.phase;
+    if (vis && cle !== this.pop_cle) { this.pop_cle = cle; this.pop_ouvert = true; }       // nouveau tour : le pop-up s'ouvre
+    if (!vis) this.pop_cle = vis ? this.pop_cle : (p.phase === "pose" && !this.tour_ia() ? this.pop_cle : "");
+    const ouvert = vis && this.pop_ouvert;
+    const sig = [ouvert, vis, this.sel, p.stock[p.joueur].join(), bot, window.innerWidth].join("|");
+    if (sig === this.pop_sig && !force) return;
+    this.pop_sig = sig;
+    el.classList.toggle("on", ouvert); el.style.bottom = bot + "px";
+    tab.classList.toggle("on", vis && !ouvert); tab.style.bottom = (bot + 6) + "px";
+    if (!ouvert) return;
+    document.getElementById("pop-titre").innerHTML = `<b style="color:${COULEURS[p.joueur]}">${NOMS[p.joueur]}</b> — choisissez une tuile`;
+    const { cols, rows, cw, ch } = this.pop_dims(), cv = document.getElementById("pop-cv"), d = Math.min(3, window.devicePixelRatio || 1);
+    cv.width = cw * cols * d; cv.height = ch * rows * d; cv.style.width = cw * cols + "px"; cv.style.height = ch * rows + "px";
+    const g = cv.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, cw * cols, ch * rows);
+    const autres = [0, 1, 2, 3].slice(0, p.np).filter(x => x !== p.joueur);
+    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+      const v = p.mode === MODE_CHAOS ? row : p.total - row, dos = p.np === 2 ? 1 - p.joueur : autres[col], s = v * 4 + dos, n = p.stock[p.joueur][s], c = p.np === 2 ? col : 0;
+      const dispo = c < n, cx = cw * (col + 0.5), cy = ch * (row + 0.5), [cr, vr, pr] = this.face_reserve(p.joueur, s);
+      const sel = dispo && s === this.sel && c === 0;
+      this.dessiner_losange(g, [cx - cw * 0.46, cy, cx, cy - ch * 0.46, cx + cw * 0.46, cy, cx, cy + ch * 0.46], cx, cy, cr, vr, { grise: !dispo, pastille: pr, largeur: sel ? 3.5 : 1.5, contour: sel ? "#ffffff" : undefined, ss: ch / 30 * 0.85, echtxt: 0.9 });
+    }
+  }
+  clic_popup(e) {
+    const p = this.partie, cv = document.getElementById("pop-cv"), r = cv.getBoundingClientRect(), { cols, rows, cw, ch } = this.pop_dims();
+    const col = Math.floor((e.clientX - r.left) / cw), row = Math.floor((e.clientY - r.top) / ch);
+    if (col < 0 || row < 0 || col >= cols || row >= rows) return;
+    const autres = [0, 1, 2, 3].slice(0, p.np).filter(x => x !== p.joueur);
+    const v = p.mode === MODE_CHAOS ? row : p.total - row, dos = p.np === 2 ? 1 - p.joueur : autres[col], s = v * 4 + dos;
+    if (p.stock[p.joueur][s] <= (p.np === 2 ? col : 0)) return;
+    this.choisir(s); this.pop_ouvert = false; this.maj_popup(true);
   }
   selection_valide() {
     const st = this.partie.stock[this.partie.joueur];
@@ -1649,6 +1716,16 @@ onmessage = e => { const { id, niveau, partie } = e.data; Object.setPrototypeOf(
     B.obj.onclick = () => this.nouvelle_partie(); B.mode.onclick = () => this.changer_mode();
     B.niveau.onclick = () => this.changer_niveau(); B.camp.onclick = () => this.changer_camp();
     B.vue.onclick = () => this.changer_vue();
+    const opt = document.getElementById("opt");
+    document.getElementById("b-options").onclick = () => { document.body.classList.remove("menuouvert"); opt.classList.add("on"); };
+    document.getElementById("opt-fermer").onclick = () => opt.classList.remove("on");
+    opt.addEventListener("pointerdown", e => { if (e.target === opt) opt.classList.remove("on"); });
+    for (const id of ["b-regles", "b-editeur", "b-camp"]) document.getElementById(id).addEventListener("click", () => opt.classList.remove("on"));
+    B.popup.onclick = () => { this.popup = !this.popup; try { localStorage.setItem("losanges_popup", this.popup ? "1" : "0"); } catch (e) {} this.pop_cle = ""; this.pop_ouvert = this.popup; this.maj_boutons(); this.maj_popup(true); };
+    document.getElementById("pop-x").onclick = () => { this.pop_ouvert = false; this.maj_popup(true); };
+    document.getElementById("pop-tab").onclick = () => { this.pop_ouvert = true; this.maj_popup(true); };
+    document.getElementById("pop-cv").addEventListener("pointerup", e => this.clic_popup(e));
+    setInterval(() => this.maj_popup(), 150);
     B.menu.onclick = () => document.body.classList.toggle("menuouvert");
     for (const k of ["obj", "mode", "camp", "vue"]) B[k].addEventListener("click", () => document.body.classList.remove("menuouvert"));
     B.tourner.onclick = () => this.tourner(1); B.annuler.onclick = () => this.annuler();
